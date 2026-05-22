@@ -460,7 +460,14 @@
       <div class="card">
         <label>כמה שחקנים?</label>
         <input type="number" id="player-count" min="4" max="20" value="4" />
-        <button class="btn btn-primary" onclick="startPlayerEntry()">המשך</button>
+        <label>כמה מילים כל שחקן רושם?</label>
+        <input type="number" id="words-per-player" min="3" max="20" value="10" />
+        <label style="margin-top:12px; display:flex; align-items:center; gap:8px; cursor:pointer;">
+          <input type="checkbox" id="auto-words" style="width:auto; margin:0;" onchange="toggleAutoWordsInfo()" />
+          <span>מילים אוטומטיות (מהבנק)</span>
+        </label>
+        <p id="auto-words-info" style="display:none; font-size:0.85rem; color:var(--cp-text-muted); margin-top:4px;">כל המילים ייבחרו אוטומטית מהבנק — רק צריך להכניס שמות שחקנים.</p>
+        <button class="btn btn-primary" style="margin-top:16px;" onclick="startPlayerEntry()">המשך</button>
       </div>
     </div>
 
@@ -602,11 +609,21 @@
     let currentPlayerIndex = 0;
     let currentWordCount = 0;
     let totalPlayers = 0;
+    let wordsPerPlayer = 10;
+    let autoWordsMode = false;
     let tempPlayerName = '';
     let tempWords = [];
 
+    function toggleAutoWordsInfo() {
+      const info = document.getElementById('auto-words-info');
+      info.style.display = document.getElementById('auto-words').checked ? 'block' : 'none';
+    }
+
     function startPlayerEntry() {
       totalPlayers = parseInt(document.getElementById('player-count').value);
+      wordsPerPlayer = parseInt(document.getElementById('words-per-player').value);
+      autoWordsMode = document.getElementById('auto-words').checked;
+
       if (totalPlayers < 4 || isNaN(totalPlayers)) {
         alert('נדרשים לפחות 4 שחקנים');
         return;
@@ -615,12 +632,59 @@
         alert('מספר השחקנים חייב להיות זוגי');
         return;
       }
+      if (wordsPerPlayer < 3 || isNaN(wordsPerPlayer)) {
+        alert('מינימום 3 מילים לשחקן');
+        return;
+      }
+
+      if (autoWordsMode) {
+        const needed = totalPlayers * wordsPerPlayer;
+        if (needed > characterBank.length) {
+          alert(`אין מספיק דמויות בבנק! יש ${characterBank.length} ונדרשות ${needed}`);
+          return;
+        }
+      }
+
       currentPlayerIndex = 0;
       gameState.players = [];
       gameState.words = [];
-      showScreen('player-entry');
-      updatePlayerProgress();
-      resetPlayerEntry();
+
+      if (autoWordsMode) {
+        // Only collect player names, skip word entry
+        showScreen('player-entry');
+        updatePlayerProgress();
+        resetPlayerEntryNamesOnly();
+      } else {
+        showScreen('player-entry');
+        updatePlayerProgress();
+        resetPlayerEntry();
+      }
+    }
+
+    function resetPlayerEntryNamesOnly() {
+      document.getElementById('player-name-input').value = '';
+      document.getElementById('player-name-input').disabled = false;
+      document.getElementById('confirm-name-btn').style.display = 'block';
+      document.getElementById('confirm-name-btn').onclick = confirmPlayerNameAutoMode;
+      document.getElementById('words-entry').style.display = 'none';
+      tempPlayerName = '';
+      document.getElementById('player-name-input').focus();
+    }
+
+    function confirmPlayerNameAutoMode() {
+      const name = document.getElementById('player-name-input').value.trim();
+      if (!name) { alert('הכנס שם'); return; }
+      gameState.players.push(name);
+      currentPlayerIndex++;
+      if (currentPlayerIndex >= totalPlayers) {
+        // Auto-fill words from bank
+        const shuffledBank = [...characterBank].sort(() => Math.random() - 0.5);
+        gameState.words = shuffledBank.slice(0, totalPlayers * wordsPerPlayer);
+        createTeams();
+      } else {
+        updatePlayerProgress();
+        resetPlayerEntryNamesOnly();
+      }
     }
 
     function updatePlayerProgress() {
@@ -634,6 +698,7 @@
       document.getElementById('player-name-input').value = '';
       document.getElementById('player-name-input').disabled = false;
       document.getElementById('confirm-name-btn').style.display = 'block';
+      document.getElementById('confirm-name-btn').onclick = confirmPlayerName;
       document.getElementById('words-entry').style.display = 'none';
       document.getElementById('word-input').value = '';
       document.getElementById('words-list').innerHTML = '';
@@ -666,7 +731,7 @@
     }
 
     function selectFromBank(name) {
-      if (currentWordCount >= 10) return;
+      if (currentWordCount >= wordsPerPlayer) return;
       tempWords.push(name);
       currentWordCount++;
 
@@ -675,7 +740,7 @@
       tag.textContent = name;
       document.getElementById('words-list').appendChild(tag);
 
-      if (currentWordCount >= 10) {
+      if (currentWordCount >= wordsPerPlayer) {
         gameState.players.push(tempPlayerName);
         gameState.words.push(...tempWords);
         currentPlayerIndex++;
@@ -687,7 +752,7 @@
         }
       } else {
         document.getElementById('word-label').textContent =
-          `מילה ${currentWordCount + 1} מתוך 10:`;
+          `מילה ${currentWordCount + 1} מתוך ${wordsPerPlayer}:`;
         renderBank(document.getElementById('bank-filter').value);
       }
     }
@@ -702,7 +767,7 @@
       document.getElementById('player-name-input').disabled = true;
       document.getElementById('confirm-name-btn').style.display = 'none';
       document.getElementById('words-entry').style.display = 'block';
-      document.getElementById('word-label').textContent = `מילה 1 מתוך 10:`;
+      document.getElementById('word-label').textContent = `מילה 1 מתוך ${wordsPerPlayer}:`;
       document.getElementById('word-input').focus();
       renderBank();
     }
@@ -723,7 +788,7 @@
       wordInput.value = '';
       wordInput.focus();
 
-      if (currentWordCount >= 10) {
+      if (currentWordCount >= wordsPerPlayer) {
         // Save player and words
         gameState.players.push(tempPlayerName);
         gameState.words.push(...tempWords);
@@ -738,7 +803,7 @@
         }
       } else {
         document.getElementById('word-label').textContent =
-          `מילה ${currentWordCount + 1} מתוך 10:`;
+          `מילה ${currentWordCount + 1} מתוך ${wordsPerPlayer}:`;
       }
     }
 
@@ -748,7 +813,11 @@
         const activeScreen = document.querySelector('.screen.active');
         if (activeScreen && activeScreen.id === 'screen-player-entry') {
           if (!document.getElementById('player-name-input').disabled) {
-            confirmPlayerName();
+            if (autoWordsMode) {
+              confirmPlayerNameAutoMode();
+            } else {
+              confirmPlayerName();
+            }
           } else {
             addWord();
           }
@@ -980,6 +1049,8 @@
       currentPlayerIndex = 0;
       currentWordCount = 0;
       totalPlayers = 0;
+      wordsPerPlayer = 10;
+      autoWordsMode = false;
       showScreen('home');
     }
   </script>
