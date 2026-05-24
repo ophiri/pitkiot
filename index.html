@@ -599,6 +599,35 @@
       allWordsUsedThisRound: false
     };
 
+    // Wake Lock - keep screen on
+    let wakeLock = null;
+
+    async function requestWakeLock() {
+      try {
+        if ('wakeLock' in navigator) {
+          wakeLock = await navigator.wakeLock.request('screen');
+          wakeLock.addEventListener('release', () => { wakeLock = null; });
+        }
+      } catch (e) { /* silently fail if not supported */ }
+    }
+
+    async function releaseWakeLock() {
+      if (wakeLock) {
+        await wakeLock.release();
+        wakeLock = null;
+      }
+    }
+
+    // Re-acquire wake lock when page becomes visible again
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible' && !wakeLock) {
+        requestWakeLock();
+      }
+    });
+
+    // Request on page load
+    requestWakeLock();
+
     // Screen management
     function showScreen(name) {
       document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
